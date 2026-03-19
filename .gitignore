@@ -1,0 +1,57 @@
+# .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+build_tmp/
+*.egg
+
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Base de datos (NO versionar la DB de produccion)
+*.db
+*.db-shm
+*.db-wal
+
+# Variables de entorno (contiene datos del negocio)
+.env
+
+# Backups generados
+backups/
+
+# PDFs y reportes generados
+reportes/
+
+# Logs
+logs/
+*.log
+
+# PyInstaller
+*.spec.bak
+dist/
+build_tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
