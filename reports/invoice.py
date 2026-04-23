@@ -20,6 +20,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from app.core.config import settings
+from app.core.app_settings import ApplicationSettings
 
 PAGE_W, PAGE_H = A4
 MARGIN_L = 20 * mm
@@ -45,14 +46,18 @@ def generate_invoice(
     sale,
     customer=None,
     output_dir: Path | None = None,
+    doc_type: str = "FACTURA",
+    doc_subtitle: str = "Comprobante de venta"
 ) -> Path:
     """
-    Genera una factura A4 en PDF.
+    Genera una factura (o presupuesto) A4 en PDF.
 
     Parametros:
-        sale:       Objeto Sale con .details, .seller, etc.
-        customer:   Objeto Customer opcional.
-        output_dir: Directorio de salida.
+        sale:         Objeto Sale con .details, .seller, etc.
+        customer:     Objeto Customer opcional.
+        output_dir:   Directorio de salida.
+        doc_type:     Titulo del comprobante (Factura o Presupuesto).
+        doc_subtitle: Subtitulo.
 
     Retorna:
         Path al archivo PDF generado.
@@ -61,36 +66,58 @@ def generate_invoice(
         output_dir = settings.REPORTS_DIR
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    
+    # Nombre del archivo cambia si no es factura
+    doc_slug = doc_type.lower().split()[0]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename  = output_dir / f"factura_{sale.id}_{timestamp}.pdf"
+    filename  = output_dir / f"{doc_slug}_{sale.id}_{timestamp}.pdf"
 
     c = canvas.Canvas(str(filename), pagesize=A4)
+
+    app_set = ApplicationSettings.get_settings()
 
     # ── Franja superior de color ──────────────────────────────────────────────
     c.setFillColor(COLOR_HEADER)
     c.rect(0, PAGE_H - 30 * mm, PAGE_W, 30 * mm, fill=True, stroke=False)
 
+    text_x = MARGIN_L
+    logo_path = app_set.get("logo_path", "")
+    if logo_path and Path(logo_path).exists():
+        try:
+            from reportlab.lib.utils import ImageReader
+            img = ImageReader(logo_path)
+            iw, ih = img.getSize()
+            aspect = ih / float(iw)
+            logo_height = 20 * mm
+            logo_width = logo_height / aspect
+            c.drawImage(logo_path, MARGIN_L, PAGE_H - 25 * mm, width=logo_width, height=logo_height, preserveAspectRatio=True, mask="auto")
+            text_x = MARGIN_L + logo_width + 5 * mm
+        except Exception:
+            pass
+
     # Nombre del negocio en la franja
     c.setFillColor(colors.white)
     c.setFont(FONT_BOLD, 18)
-    c.drawString(MARGIN_L, PAGE_H - 16 * mm, settings.BUSINESS_NAME.upper())
+    c.drawString(text_x, PAGE_H - 16 * mm, app_set.get("company_name", "Mi Empresa").upper())
 
     c.setFont(FONT_NORMAL, 9)
     header_parts = []
-    if settings.BUSINESS_ADDRESS:
-        header_parts.append(settings.BUSINESS_ADDRESS)
-    if settings.BUSINESS_PHONE:
-        header_parts.append(f"Tel: {settings.BUSINESS_PHONE}")
-    if settings.BUSINESS_TAX_ID:
-        header_parts.append(f"CUIT: {settings.BUSINESS_TAX_ID}")
-    c.drawString(MARGIN_L, PAGE_H - 24 * mm, "  |  ".join(header_parts))
+    address = app_set.get("address", "")
+    if address:
+        header_parts.append(address)
+    phone = app_set.get("phone", "")
+    if phone:
+        header_parts.append(f"Tel: {phone}")
+    tax_id = app_set.get("company_id", "")
+    if tax_id:
+        header_parts.append(tax_id)
+    c.drawString(text_x, PAGE_H - 24 * mm, "  |  ".join(header_parts))
 
-    # "FACTURA" en el extremo derecho de la franja
+    # Тиpо de Documento en el extremo derecho de la franja
     c.setFont(FONT_BOLD, 22)
-    c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 16 * mm, "FACTURA")
+    c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 16 * mm, doc_type)
     c.setFont(FONT_NORMAL, 9)
-    c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 24 * mm, "Comprobante de venta")
+    c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 24 * mm, doc_subtitle)
 
     # ── Datos de la venta ─────────────────────────────────────────────────────
     y = PAGE_H - 40 * mm
@@ -130,8 +157,15 @@ def generate_invoice(
     c.setFillColor(COLOR_TEXT)
 
     c.setFont(FONT_NORMAL, 9)
-    fecha = sale.created_at.strftime("%d/%m/%Y") if sale.created_at else datetime.now().strftime("%d/%m/%Y")
-    hora  = sale.created_at.strftime("%H:%M")    if sale.created_at else ""
+    if sale.created_at:
+        from datetime import timezone
+        local_dt = sale.created_at.replace(tzinfo=timezone.utc).astimezone()
+        fecha = local_dt.strftime("%d/%m/%Y")
+        hora = local_dt.strftime("%H:%M")
+    else:
+        fecha = datetime.now().strftime("%d/%m/%Y")
+        hora = datetime.now().strftime("%H:%M")
+    
     c.drawString(box_x, box_y - 12 * mm, f"Fecha: {fecha}  {hora}")
 
     method_label = {
@@ -248,10 +282,9 @@ def generate_invoice(
 
     c.setFillColor(colors.white)
     c.setFont(FONT_NORMAL, 7)
-    footer_text = f"Generado por DevMont Commerce  •  {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-    if settings.BUSINESS_EMAIL:
-        footer_text += f"  •  {settings.BUSINESS_EMAIL}"
-    c.drawCentredString(PAGE_W / 2, 5 * mm, footer_text)
+    footer_msg = app_set.get("footer_text", "Generado por DevMont Commerce")
+    full_footer = f"{footer_msg}  •  {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    c.drawCentredString(PAGE_W / 2, 5 * mm, full_footer)
 
     c.save()
     return filename

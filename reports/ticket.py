@@ -14,10 +14,14 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+from app.core.logging import get_logger
+logger = get_logger(__name__)
+
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from app.core.config import settings
+from app.core.app_settings import ApplicationSettings
 
 # ── Dimensiones del ticket ────────────────────────────────────────────────────
 TICKET_W    = 80 * mm       # Ancho del papel termico 80mm
@@ -34,13 +38,18 @@ def _fmt(amount: Decimal) -> str:
     return f"${amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def generate_ticket(sale, output_dir: Path | None = None) -> Path:
+def generate_ticket(
+    sale, 
+    output_dir: Path | None = None,
+    doc_type: str = "TICKET DE VENTA"
+) -> Path:
     """
     Genera el ticket de venta en PDF para impresora termica.
 
     Parametros:
         sale:       Objeto Sale de SQLAlchemy con .details, .seller, etc.
         output_dir: Directorio de salida. Por defecto: settings.REPORTS_DIR
+        doc_type:   TItulo principal del ticket
 
     Retorna:
         Path al archivo PDF generado.
@@ -50,12 +59,20 @@ def generate_ticket(sale, output_dir: Path | None = None) -> Path:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    doc_slug = doc_type.lower().split()[0]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename  = output_dir / f"ticket_venta_{sale.id}_{timestamp}.pdf"
+    filename  = output_dir / f"{doc_slug}_{sale.id}_{timestamp}.pdf"
 
-    # Calcular alto dinamico segun cantidad de items
+    app_set = ApplicationSettings.get_settings()
+    logo_path = app_set.get("logo_path", "")
+    logo_exists = bool(logo_path and Path(logo_path).exists())
+
+    # Calcular alto dinamico segun cantidad de items y presencia de logo
     n_items    = len(sale.details) if sale.details else 0
     base_height = 110 * mm
+    if logo_exists:
+        base_height += 40 * mm  # Agregar espacio extra para el logo
+    
     item_height = 7  * mm
     page_height = base_height + (n_items * item_height)
 
@@ -82,26 +99,57 @@ def generate_ticket(sale, output_dir: Path | None = None) -> Path:
             c.setDash()
         c.line(MARGIN, y, TICKET_W - MARGIN, y)
         c.setDash()
-        y -= 2 * mm
+        y -= 4 * mm  # Salto corregido global para no pisar el tope de nuevas letras
+
+    # ── Logo ──────────────────────────────────────────────────────────────────
+    if logo_exists:
+        try:
+            from reportlab.lib.utils import ImageReader
+            img = ImageReader(logo_path)
+            iw, ih = img.getSize()
+            aspect = ih / float(iw)
+            logo_width = 30 * mm
+            logo_height = logo_width * aspect
+            y -= logo_height
+            c.drawImage(logo_path, (TICKET_W - logo_width) / 2, y, width=logo_width, height=logo_height, preserveAspectRatio=True, mask="auto")
+            y -= 3 * mm
+        except Exception as e:
+            logger.error(f"No se pudo cargar el logo del ticket: {e}")
 
     # ── Encabezado ────────────────────────────────────────────────────────────
-    draw_text(settings.BUSINESS_NAME.upper(), FONT_BOLD, 12)
-    if settings.BUSINESS_ADDRESS:
-        draw_text(settings.BUSINESS_ADDRESS, FONT_NORMAL, 7)
-    if settings.BUSINESS_PHONE:
-        draw_text(f"Tel: {settings.BUSINESS_PHONE}", FONT_NORMAL, 7)
-    if settings.BUSINESS_TAX_ID:
-        draw_text(f"CUIT: {settings.BUSINESS_TAX_ID}", FONT_NORMAL, 7)
-    if settings.BUSINESS_EMAIL:
-        draw_text(settings.BUSINESS_EMAIL, FONT_NORMAL, 7)
+    draw_text(app_set.get("company_name", "Mi Empresa").upper(), FONT_BOLD, 12)
+    address = app_set.get("address", "")
+    if address:
+        draw_text(address, FONT_NORMAL, 7)
+    phone = app_set.get("phone", "")
+    if phone:
+        draw_text(f"Tel: {phone}", FONT_NORMAL, 7)
+    cuit = app_set.get("company_id", "")
+    if cuit:
+        draw_text(cuit, FONT_NORMAL, 7)
 
     draw_line()
 
     # ── Datos de la venta ─────────────────────────────────────────────────────
-    draw_text("TICKET DE VENTA", FONT_BOLD, 9)
-    y -= 1 * mm
 
-    fecha = sale.created_at.strftime("%d/%m/%Y  %H:%M") if sale.created_at else datetime.now().strftime("%d/%m/%Y  %H:%M")
+    if "PRESUPUESTO" in doc_type:
+        c.setFont(FONT_BOLD, 9)
+        c.drawCentredString(TICKET_W / 2, y, "PRESUPUESTO")
+        y -= 4 * mm
+        c.setFont(FONT_BOLD, 6)
+        c.drawCentredString(TICKET_W / 2, y, "NO VÁLIDO COMO FACTURA")
+        y -= 5 * mm
+    else:
+        draw_text(doc_type, FONT_BOLD, 9)
+        y -= 1 * mm
+
+    if sale.created_at:
+        from datetime import timezone
+        local_dt = sale.created_at.replace(tzinfo=timezone.utc).astimezone()
+        fecha = local_dt.strftime("%d/%m/%Y  %H:%M")
+    else:
+        fecha = datetime.now().strftime("%d/%m/%Y  %H:%M")
+
     draw_text(f"N° {sale.id:06d}   {fecha}", FONT_NORMAL, 7)
 
     if sale.seller:
@@ -165,10 +213,10 @@ def generate_ticket(sale, output_dir: Path | None = None) -> Path:
     draw_line()
 
     # ── Pie ───────────────────────────────────────────────────────────────────
-    if settings.BUSINESS_SLOGAN:
-        draw_text(settings.BUSINESS_SLOGAN, FONT_NORMAL, 7)
+    footer = app_set.get("footer_text", "¡Gracias por su compra!")
+    if footer:
+        draw_text(footer, FONT_NORMAL, 7)
 
-    draw_text("¡Gracias por su compra!", FONT_BOLD, 8)
     draw_text("Conserve este ticket", FONT_NORMAL, 7)
     y -= 4 * mm
 

@@ -39,6 +39,10 @@ class DevMontApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._current_view = None
+        self._current_view_name = None
+        
+        # Caché de vistas para optimización
+        self._views_cache = {}
 
         # Iniciar en login
         self.show_view("login")
@@ -48,17 +52,42 @@ class DevMontApp(ctk.CTk):
     def show_view(self, view_name: str, **kwargs) -> None:
         """
         Navega a una vista por nombre.
-        Destruye la vista actual antes de crear la nueva.
+        Utiliza un caché para evitar destruir y reconstruir las vistas.
         """
-        # Destruir vista actual
-        if self._current_view is not None:
-            self._current_view.destroy()
-            self._current_view = None
+        # Excepciones que siempre deberían forzar una destrucción del caché general,
+        # como volver al login (logout).
+        if view_name == "login":
+            # Si vamos a login, destruimos todo el caché menos el login para limpiar la sesión
+            for name, view in list(self._views_cache.items()):
+                if name != "login":
+                    view.destroy()
+                    del self._views_cache[name]
+                    
+            if self._current_view is not None and self._current_view_name != "login":
+                self._current_view.pack_forget()
 
-        # Importar vistas de forma diferida para evitar imports circulares
-        # y acelerar el arranque inicial (solo se importa lo que se necesita)
+        else:
+            # Ocultar vista actual sin destruirla
+            if self._current_view is not None:
+                self._current_view.pack_forget()
+
+        # Comprobar si la vista ya existe en caché y si no estamos forzando su recarga por kwargs
+        if view_name in self._views_cache and not kwargs.get('force_reload', False):
+            self._current_view = self._views_cache[view_name]
+            self._current_view_name = view_name
+            self._current_view.pack(fill="both", expand=True)
+            
+            # Si la vista tiene un método refresh() o load_data(), lo llamamos para actualizar los datos
+            if hasattr(self._current_view, "refresh"):
+                self._current_view.refresh()
+            elif hasattr(self._current_view, "load_data"):
+                self._current_view.load_data()
+                
+            logger.info(f"Navegando a vista (desde caché): {view_name}")
+            return
+
+        # Si no existe, crearla y guardarla en caché
         ViewClass = self._get_view_class(view_name)
-
         if ViewClass is None:
             logger.error(f"Vista desconocida: '{view_name}'")
             return
@@ -69,8 +98,10 @@ class DevMontApp(ctk.CTk):
                 navigate=self.show_view,
                 **kwargs,
             )
+            self._views_cache[view_name] = self._current_view
+            self._current_view_name = view_name
             self._current_view.pack(fill="both", expand=True)
-            logger.info(f"Navegando a vista: {view_name}")
+            logger.info(f"Navegando a vista (nueva): {view_name}")
         except Exception as e:
             logger.error(f"Error al crear vista '{view_name}': {e}")
             raise
@@ -121,6 +152,10 @@ class DevMontApp(ctk.CTk):
         if view_name == "import":
             from app.ui.views.import_view import ImportView
             return ImportView
+
+        if view_name == "settings":
+            from app.ui.views.settings_view import SettingsView
+            return SettingsView
 
         return None
 

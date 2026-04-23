@@ -75,7 +75,7 @@ class ProductsView(ctk.CTkFrame):
             border_color=COLORS["border"],
         )
         right.grid(row=0, column=1, sticky="ns")
-        right.grid_propagate(False)
+        right.pack_propagate(False)  # Fijar el tamaño para que no baile al cambiar productos
         self._build_detail_panel(right)
 
     def _build_list_panel(self, parent: ctk.CTkFrame) -> None:
@@ -111,7 +111,9 @@ class ProductsView(ctk.CTkFrame):
         self.table = DataTable(
             parent,
             columns=["SKU", "Nombre", "Unidad", "Precio", "Stock", "Estado"],
-            col_widths=[90, 260, 80, 100, 70, 70],
+            col_widths=[90, 0, 80, 100, 70, 70],
+            col_weights=[0, 1, 0, 0, 0, 0],
+            col_aligns=["w", "w", "center", "e", "center", "center"],
             on_select=self._on_row_select,
         )
         self.table.pack(fill="both", expand=True)
@@ -284,7 +286,7 @@ class ProductsView(ctk.CTkFrame):
         try:
             with SessionLocal() as session:
                 svc = ProductService(session)
-                products = svc.get_all_products(limit=500)
+                products = svc.get_all_products(limit=100)
 
             rows = []
             for p in products:

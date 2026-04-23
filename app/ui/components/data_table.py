@@ -35,6 +35,8 @@ class DataTable(ctk.CTkFrame):
         master,
         columns: list[str],
         col_widths: list[int] | None = None,
+        col_weights: list[int] | None = None,
+        col_aligns: list[str] | None = None,
         on_select: Callable[[list], None] | None = None,
         page_size: int = PAGE_SIZE,
         **kwargs,
@@ -42,6 +44,8 @@ class DataTable(ctk.CTkFrame):
         super().__init__(master, fg_color=COLORS["bg_panel"], corner_radius=8, **kwargs)
         self.columns = columns
         self.col_widths = col_widths or self._default_widths(columns)
+        self.col_weights = col_weights or [0] * len(columns)
+        self.col_aligns = col_aligns or ["w"] * len(columns)
         self.on_select = on_select
         self.page_size = page_size
 
@@ -60,14 +64,19 @@ class DataTable(ctk.CTkFrame):
         header.pack(fill="x")
 
         for i, col in enumerate(self.columns):
+            header.grid_columnconfigure(i, weight=self.col_weights[i])
+            # Para títulos usamos la misma alineación o "w" si es center
+            anchor_h = "center" if self.col_aligns[i] == "center" else self.col_aligns[i]
+            sticky_h = "ew" if self.col_weights[i] > 0 else ("w" if anchor_h=="w" else ("e" if anchor_h=="e" else "ew"))
+            
             ctk.CTkLabel(
                 header,
                 text=col,
                 font=FONTS["body_bold"],
                 text_color=COLORS["text_primary"],
-                width=self.col_widths[i],
-                anchor="w",
-            ).grid(row=0, column=i, padx=(SIZES["padding_sm"], 0), pady=6, sticky="w")
+                width=self.col_widths[i] if self.col_weights[i] == 0 else 0,
+                anchor=anchor_h,
+            ).grid(row=0, column=i, padx=(SIZES["padding_sm"], SIZES["padding_sm"]), pady=6, sticky=sticky_h)
 
         # Area de filas (scrollable)
         self.rows_frame = ctk.CTkScrollableFrame(
@@ -177,14 +186,18 @@ class DataTable(ctk.CTkFrame):
             row_frame.pack_propagate(False)
 
             for j, cell in enumerate(row_data):
+                row_frame.grid_columnconfigure(j, weight=self.col_weights[j])
+                anchor_h = self.col_aligns[j]
+                sticky_h = "ew" if self.col_weights[j] > 0 else ("w" if anchor_h=="w" else ("e" if anchor_h=="e" else "ew"))
+                
                 ctk.CTkLabel(
                     row_frame,
                     text=str(cell),
                     font=FONTS["body"],
                     text_color=COLORS["text_primary"],
-                    width=self.col_widths[j],
-                    anchor="w",
-                ).grid(row=0, column=j, padx=(SIZES["padding_sm"], 0), pady=4, sticky="w")
+                    width=self.col_widths[j] if self.col_weights[j] == 0 else 0,
+                    anchor=anchor_h,
+                ).grid(row=0, column=j, padx=(SIZES["padding_sm"], SIZES["padding_sm"]), pady=4, sticky=sticky_h)
 
             # Evento de seleccion
             row_frame.bind("<Button-1>", lambda e, idx=i: self._select_row(idx))

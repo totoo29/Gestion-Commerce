@@ -70,11 +70,13 @@ class SaleService:
                     raise ProductoNoEncontradoError(item.product_id)
 
                 if stock.quantity < item.quantity:
-                    raise StockInsuficienteError(
-                        product_id=item.product_id,
-                        disponible=int(stock.quantity),
-                        requerido=int(item.quantity),
+                    # Permitir ventas con stock negativo por petición del local
+                    logger.warning(
+                        f"Venta en negativo. Producto ID: {item.product_id}. "
+                        f"Disp: {stock.quantity}, Requerido: {item.quantity}. "
+                        f"El stock quedará en negativo y deberá balancearse luego."
                     )
+                    # raise StockInsuficienteError(...)
 
                 # Descontar stock
                 stock_before = stock.quantity

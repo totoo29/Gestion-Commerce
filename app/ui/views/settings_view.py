@@ -1,153 +1,137 @@
-from __future__ import annotations
-
+import os
 from typing import Callable
-
+from tkinter import filedialog
 import customtkinter as ctk
 
-from app.core.config import settings
-from app.ui.components.modal import AlertModal
+from app.core.app_settings import ApplicationSettings
 from app.ui.components import AppShell, ShellConfig
+from app.ui.components.modal import AlertModal
 from app.ui.theme import COLORS, FONTS, SIZES
 
-
 class SettingsView(ctk.CTkFrame):
-    """Configuración (tema + datos del negocio)."""
-
+    """
+    Vista de configuración de la facturación y sistema.
+    """
+    
     def __init__(self, master: ctk.CTk, navigate: Callable, **kwargs):
         super().__init__(master, fg_color=COLORS["bg_main"], **kwargs)
         self.navigate = navigate
         self._build_ui()
+        self._load_data()
 
     def _build_ui(self) -> None:
         shell = AppShell(
             self,
             navigate=self.navigate,
-            config=ShellConfig(title="Configuración", active_view="settings"),
+            config=ShellConfig(title="Configuración General", active_view="settings"),
         )
         shell.pack(fill="both", expand=True)
 
-        page = ctk.CTkFrame(shell.content, fg_color="transparent")
-        page.grid(row=0, column=0, sticky="nsew")
-        page.grid_columnconfigure(0, weight=1)
+        main = ctk.CTkFrame(shell.content, fg_color="transparent")
+        main.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(
-            page,
-            text="Configuración",
-            font=FONTS["title"],
-            text_color=COLORS["text_primary"],
-        ).grid(row=0, column=0, sticky="w", pady=(0, SIZES["padding"]))
-
-        grid = ctk.CTkFrame(page, fg_color="transparent")
-        grid.grid(row=1, column=0, sticky="ew")
-        grid.grid_columnconfigure((0, 1), weight=1, uniform="cols")
-
-        # Card: Datos del negocio
-        card_biz = ctk.CTkFrame(
-            grid,
+        card = ctk.CTkFrame(
+            main, 
             fg_color=COLORS["bg_panel"],
             corner_radius=SIZES["radius_lg"],
             border_width=1,
             border_color=COLORS["border"],
         )
-        card_biz.grid(row=0, column=0, sticky="nsew", pady=(0, SIZES["padding"]))
+        card.pack(fill="x", padx=SIZES["padding_lg"], pady=SIZES["padding_lg"])
 
         ctk.CTkLabel(
-            card_biz,
-            text="Datos del negocio",
-            font=FONTS["heading"],
-            text_color=COLORS["text_primary"],
-        ).pack(anchor="w", padx=SIZES["padding"], pady=(SIZES["padding"], 0))
+            card,
+            text="Datos Formales e Impresión (Tickets y Facturas)",
+            font=FONTS["subtitle"],
+            text_color=COLORS["text_primary"]
+        ).pack(anchor="w", padx=SIZES["padding_lg"], pady=(SIZES["padding_lg"], SIZES["padding"]))
 
-        ctk.CTkLabel(
-            card_biz,
-            text="Se usan en tickets, facturas y reportes.",
-            font=FONTS["small"],
-            text_color=COLORS["text_secondary"],
-        ).pack(anchor="w", padx=SIZES["padding"], pady=(4, SIZES["padding_sm"]))
+        self.var_company_name = ctk.StringVar()
+        self.var_company_id = ctk.StringVar()
+        self.var_address = ctk.StringVar()
+        self.var_phone = ctk.StringVar()
+        self.var_footer = ctk.StringVar()
+        self.var_logo = ctk.StringVar()
+        self.var_format = ctk.StringVar()
 
-        form = ctk.CTkFrame(card_biz, fg_color="transparent")
-        form.pack(fill="x", padx=SIZES["padding"], pady=(0, SIZES["padding"]))
+        self._make_input(card, "Nombre Comercial:", self.var_company_name)
+        self._make_input(card, "CUIT / RUT / Documento:", self.var_company_id)
+        self._make_input(card, "Dirección Comercial:", self.var_address)
+        self._make_input(card, "Teléfono de Contacto:", self.var_phone)
+        self._make_input(card, "Agradecimiento pie (Ticket):", self.var_footer)
 
-        self.var_name = ctk.StringVar(value=settings.BUSINESS_NAME)
-        self.var_address = ctk.StringVar(value=settings.BUSINESS_ADDRESS)
-        self.var_phone = ctk.StringVar(value=settings.BUSINESS_PHONE)
-        self.var_email = ctk.StringVar(value=settings.BUSINESS_EMAIL)
+        # Selector de Logo
+        row_logo = ctk.CTkFrame(card, fg_color="transparent")
+        row_logo.pack(fill="x", padx=SIZES["padding_lg"], pady=(0, SIZES["padding"]))
+        ctk.CTkLabel(row_logo, text="Logo Empresa:", width=180, anchor="e", font=FONTS["body"], text_color=COLORS["text_secondary"]).pack(side="left", padx=(0, 16))
+        
+        self.entry_logo = ctk.CTkEntry(row_logo, textvariable=self.var_logo, height=36, fg_color=COLORS["bg_input"], text_color=COLORS["text_primary"])
+        self.entry_logo.pack(side="left", fill="x", expand=True)
+        self.entry_logo.configure(state="disabled")
 
-        for label, var in [
-            ("Nombre", self.var_name),
-            ("Dirección", self.var_address),
-            ("Teléfono", self.var_phone),
-            ("Email", self.var_email),
-        ]:
-            ctk.CTkLabel(
-                form,
-                text=label,
-                font=FONTS["small"],
-                text_color=COLORS["text_secondary"],
-                anchor="w",
-            ).pack(fill="x", pady=(8, 0))
-            ctk.CTkEntry(
-                form,
-                textvariable=var,
-                height=SIZES["input_height"],
-                font=FONTS["body"],
-                fg_color=COLORS["bg_input"],
-                border_color=COLORS["border"],
-                text_color=COLORS["text_primary"],
-            ).pack(fill="x", pady=(2, 0))
+        ctk.CTkButton(row_logo, text="Examinar...", width=100, height=36, command=self._browse_logo, fg_color=COLORS["btn_neutral"], hover_color=COLORS["btn_neutral_hover"], font=FONTS["small"]).pack(side="left", padx=(8, 0))
 
+        # Selector de formato
+        row_fmt = ctk.CTkFrame(card, fg_color="transparent")
+        row_fmt.pack(fill="x", padx=SIZES["padding_lg"], pady=(0, SIZES["padding"]))
+        ctk.CTkLabel(row_fmt, text="Formato de Impresión:", width=180, anchor="e", font=FONTS["body"], text_color=COLORS["text_secondary"]).pack(side="left", padx=(0, 16))
+        ctk.CTkRadioButton(row_fmt, text="Ticket Térmico (80mm)", variable=self.var_format, value="80mm", text_color=COLORS["text_primary"]).pack(side="left", padx=(0, 16))
+        ctk.CTkRadioButton(row_fmt, text="Factura Tradicional (A4)", variable=self.var_format, value="A4", text_color=COLORS["text_primary"]).pack(side="left")
+
+        # Botón Guardar
         ctk.CTkButton(
-            card_biz,
-            text="Guardar",
-            height=36,
+            card,
+            text="✔ Guardar Diseño",
             font=FONTS["body_bold"],
+            height=40,
             fg_color=COLORS["btn_success"],
             hover_color=COLORS["btn_success_hover"],
-            command=self._save_business_settings,
-        ).pack(fill="x", padx=SIZES["padding"], pady=(0, SIZES["padding"]))
+            command=self._save_data
+        ).pack(anchor="e", padx=SIZES["padding_lg"], pady=SIZES["padding_lg"])
 
-    def _save_business_settings(self) -> None:
-        """
-        Persiste datos del negocio en .env (mismo formato que ReportsView).
-        """
-        try:
-            from pathlib import Path
+    def _make_input(self, parent, label_text, str_var) -> None:
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=SIZES["padding_lg"], pady=(0, SIZES["padding"]))
+        ctk.CTkLabel(
+            row, text=label_text, width=180, anchor="e", 
+            font=FONTS["body"], text_color=COLORS["text_secondary"]
+        ).pack(side="left", padx=(0, 16))
+        ctk.CTkEntry(
+            row, textvariable=str_var, height=36, 
+            font=FONTS["body"], fg_color=COLORS["bg_input"], text_color=COLORS["text_primary"]
+        ).pack(side="left", fill="x", expand=True)
 
-            env_path = Path(".env")
-            existing = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    def _browse_logo(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Seleccionar Logo",
+            filetypes=[("Imágenes", "*.png;*.jpg;*.jpeg")]
+        )
+        if path:
+            self.entry_logo.configure(state="normal")
+            self.var_logo.set(path)
+            self.entry_logo.configure(state="disabled")
 
-            new_values = {
-                "BUSINESS_NAME": self.var_name.get().strip(),
-                "BUSINESS_ADDRESS": self.var_address.get().strip(),
-                "BUSINESS_PHONE": self.var_phone.get().strip(),
-                "BUSINESS_EMAIL": self.var_email.get().strip(),
-            }
+    def _load_data(self) -> None:
+        settings = ApplicationSettings.get_settings()
+        self.var_company_name.set(settings.get("company_name", ""))
+        self.var_company_id.set(settings.get("company_id", ""))
+        self.var_address.set(settings.get("address", ""))
+        self.var_phone.set(settings.get("phone", ""))
+        self.var_footer.set(settings.get("footer_text", ""))
+        self.var_format.set(settings.get("print_format", "80mm"))
+        
+        self.entry_logo.configure(state="normal")
+        self.var_logo.set(settings.get("logo_path", ""))
+        self.entry_logo.configure(state="disabled")
 
-            updated = set()
-            out: list[str] = []
-            for line in existing:
-                stripped = line.strip()
-                if stripped.startswith("#") or "=" not in stripped:
-                    out.append(line)
-                    continue
-                key = stripped.split("=", 1)[0].strip()
-                if key in new_values:
-                    out.append(f'{key}="{new_values[key]}"')
-                    updated.add(key)
-                else:
-                    out.append(line)
-
-            for key, value in new_values.items():
-                if key not in updated:
-                    out.append(f'{key}="{value}"')
-
-            env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
-
-            for key, value in new_values.items():
-                if hasattr(settings, key):
-                    setattr(settings, key, value)
-
-            AlertModal(self, "Guardado", "Configuración actualizada.", kind="success")
-        except Exception as e:
-            AlertModal(self, "Error", str(e), kind="error")
-
+    def _save_data(self) -> None:
+        ApplicationSettings.save_settings(
+            company_name=self.var_company_name.get(),
+            company_id=self.var_company_id.get(),
+            address=self.var_address.get(),
+            phone=self.var_phone.get(),
+            footer_text=self.var_footer.get(),
+            logo_path=self.var_logo.get(),
+            print_format=self.var_format.get()
+        )
+        AlertModal(self, "Configuración guardada", "Los datos del diseño de facturación se han actualizado correctamente. Esto se aplicará a todos los próximos tickets y remitos.", kind="success")

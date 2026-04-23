@@ -100,8 +100,8 @@ class ConfirmModal(ctk.CTkToplevel):
         ph = parent.winfo_height()
         px = parent.winfo_rootx()
         py = parent.winfo_rooty()
-        mw = 400
-        mh = 200
+        mw = max(420, self.winfo_reqwidth() + 40)
+        mh = max(200, self.winfo_reqheight() + 40)
         x = px + (pw - mw) // 2
         y = py + (ph - mh) // 2
         self.geometry(f"{mw}x{mh}+{x}+{y}")
@@ -197,8 +197,8 @@ class AlertModal(ctk.CTkToplevel):
         ph = parent.winfo_height()
         px = parent.winfo_rootx()
         py = parent.winfo_rooty()
-        mw = 400
-        mh = 260
+        mw = max(420, self.winfo_reqwidth() + 40)
+        mh = max(260, self.winfo_reqheight() + 40)
         x = px + (pw - mw) // 2
         y = py + (ph - mh) // 2
         self.geometry(f"{mw}x{mh}+{x}+{y}")

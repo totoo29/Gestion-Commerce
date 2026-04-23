@@ -135,7 +135,9 @@ class StockView(ctk.CTkFrame):
         self.table_inventory = DataTable(
             parent,
             columns=["SKU", "Nombre", "Stock actual", "Stock mínimo", "Estado"],
-            col_widths=[90, 300, 110, 110, 90],
+            col_widths=[90, 0, 110, 110, 90],
+            col_weights=[0, 1, 0, 0, 0],
+            col_aligns=["w", "w", "e", "e", "center"],
             on_select=self._on_inventory_select,
         )
         self.table_inventory.pack(fill="both", expand=True, padx=pad, pady=(0, pad))
@@ -265,7 +267,9 @@ class StockView(ctk.CTkFrame):
         self.table_movements = DataTable(
             parent,
             columns=["Fecha", "Tipo", "Cantidad", "Antes", "Después", "Nota"],
-            col_widths=[140, 110, 90, 90, 90, 260],
+            col_widths=[140, 110, 90, 90, 90, 0],
+            col_weights=[0, 0, 0, 0, 0, 1],
+            col_aligns=["w", "w", "e", "e", "e", "w"],
             page_size=30,
         )
         self.table_movements.pack(fill="both", expand=True, padx=pad, pady=(0, pad))

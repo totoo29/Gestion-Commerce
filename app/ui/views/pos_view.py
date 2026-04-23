@@ -423,6 +423,17 @@ class POSView(ctk.CTkFrame):
         )
         self.btn_cobrar.pack(fill="x", padx=pad, pady=(0, 8))
 
+        # Botón Presupuesto
+        ctk.CTkButton(
+            parent,
+            text="📃  Generar Presupuesto",
+            height=36,
+            font=FONTS["small"],
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
+            command=self._generate_estimate,
+        ).pack(fill="x", padx=pad, pady=(0, 8))
+
         ctk.CTkButton(
             parent,
             text="🗑  Limpiar carrito",
@@ -726,9 +737,15 @@ class POSView(ctk.CTkFrame):
             msg += f"Recibido: {self._fmt(paid)}\nVuelto:   {self._fmt(change)}"
         else:
             label = "Tarjeta" if method == "tarjeta" else "Transferencia"
-            msg += f"Método:   {label}"
-        AlertModal(self, "¡Venta completada!", msg, kind="success")
-        self.after(200, lambda: self._print_ticket(sale_id))
+        msg += "\n\n¿Desea generar e imprimir el ticket?"
+        ConfirmModal(
+            self,
+            title="¡Venta completada!",
+            message=msg,
+            on_confirm=lambda: self._print_ticket(sale_id),
+            confirm_text="Imprimir",
+            cancel_text="No Imprimir",
+        )
         self.search_bar.focus()
 
     def _print_ticket(self, sale_id: int) -> None:
@@ -738,3 +755,24 @@ class POSView(ctk.CTkFrame):
             print_ticket(sale_id, auto_open=True)
         except Exception as e:
             logger.warning(f"No se pudo generar el ticket PDF: {e}")
+
+    def _generate_estimate(self) -> None:
+        """Imprime la vista del carrito actual en formato de Presupuesto PDF (A4 o Termica)"""
+        if not self._cart:
+            AlertModal(self, "Carrito vacío", "Agregue productos antes de imprimir el presupuesto.", kind="warning")
+            return
+            
+        from reports.pdf_service import print_estimate
+        
+        try:
+            print_estimate(
+                cart_items=list(self._cart.values()),
+                subtotal=self._subtotal(),
+                discount=self._discount(),
+                total=self._total(),
+                seller_name="Vendedor (Presupuesto)",
+                auto_open=True
+            )
+        except Exception as e:
+            logger.error(f"Error generando presupuesto: {e}")
+            AlertModal(self, "Error", f"No se pudo armar el presupuesto: {e}", kind="error")

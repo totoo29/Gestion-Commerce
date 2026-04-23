@@ -25,8 +25,46 @@ from app.services.product_service import ProductService
 from reports.ticket import generate_ticket
 from reports.invoice import generate_invoice
 from reports.stock_report import generate_stock_report
+from decimal import Decimal
 
 logger = get_logger(__name__)
+
+# ── Clases Mock para Presupuestos ──────────────────────────────────────────────
+
+class MockProduct:
+    def __init__(self, name):
+        self.name = name
+
+class MockDetail:
+    def __init__(self, item):
+        self.product_id = item.product_id
+        self.product = MockProduct(item.name)
+        self.quantity = item.quantity
+        self.unit_price = item.unit_price
+        self.subtotal = item.subtotal
+        self.discount = Decimal("0")
+
+class MockSeller:
+    def __init__(self, name):
+        self.full_name = name
+        self.username = name
+
+class MockSale:
+    def __init__(self, cart_items, subtotal, discount, total, seller_name="Vendedor"):
+        import random
+        self.id = random.randint(1000, 9999) # ID ficticio
+        self.details = [MockDetail(i) for i in cart_items]
+        self.subtotal = subtotal
+        self.discount = discount
+        self.total = total
+        self.amount_paid = Decimal("0")
+        self.change_given = Decimal("0")
+        self.payment_method = "A convenir"
+        
+        from datetime import datetime
+        self.created_at = datetime.now()
+        self.seller = MockSeller(seller_name)
+
 
 
 def _open_pdf(path: Path) -> None:
@@ -145,4 +183,41 @@ def print_stock_report(auto_open: bool = True) -> Path:
     if auto_open:
         _open_pdf(pdf_path)
 
+    return pdf_path
+
+
+def print_estimate(
+    cart_items: list, 
+    subtotal: Decimal, 
+    discount: Decimal, 
+    total: Decimal, 
+    seller_name: str, 
+    auto_open: bool = True
+) -> Path:
+    """
+    Genera un presupuesto en PDF (A4 o Ticket) sin alterar la base de datos.
+    """
+    from app.core.app_settings import ApplicationSettings
+    
+    sale = MockSale(cart_items, subtotal, discount, total, seller_name)
+    app_set = ApplicationSettings.get_settings()
+    fmt = app_set.get("print_format", "80mm")
+    
+    if fmt == "A4":
+        pdf_path = generate_invoice(
+            sale, 
+            output_dir=settings.REPORTS_DIR, 
+            doc_type="PRESUPUESTO", 
+            doc_subtitle="NO VÁLIDO COMO FACTURA"
+        )
+    else:
+        pdf_path = generate_ticket(
+            sale, 
+            output_dir=settings.REPORTS_DIR, 
+            doc_type="PRESUPUESTO"
+        )
+        
+    logger.info(f"Presupuesto generado: {pdf_path}")
+    if auto_open:
+        _open_pdf(pdf_path)
     return pdf_path

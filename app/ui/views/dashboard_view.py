@@ -306,7 +306,9 @@ class DashboardView(ctk.CTkFrame):
                     text_color=COLORS["success"],
                 ).pack(anchor="w", pady=8)
             else:
-                for stock in alertas:
+                # Limitamos la cantidad de alertas vizualizadas a 20 para optimizar el rendimiento
+                # de CustomTkinter, ya que cada fila crea 3 widgets.
+                for stock in alertas[:20]:
                     row = ctk.CTkFrame(self.alerts_frame, fg_color="transparent")
                     row.pack(fill="x", pady=2)
                     ctk.CTkLabel(
@@ -317,10 +319,18 @@ class DashboardView(ctk.CTkFrame):
                     ).pack(side="left")
                     ctk.CTkLabel(
                         row,
-                        text=f"Stock: {stock.quantity} / Mínimo: {stock.min_quantity}",
+                        text=f"Stock: {int(stock.quantity)} / Mínimo: {int(stock.min_quantity)}",
                         font=FONTS["small"],
                         text_color=COLORS["text_secondary"],
                     ).pack(side="right")
+                    
+                if len(alertas) > 20:
+                    ctk.CTkLabel(
+                        self.alerts_frame,
+                        text=f"...y {len(alertas) - 20} productos más.",
+                        font=FONTS["small"],
+                        text_color=COLORS["text_disabled"],
+                    ).pack(anchor="w", pady=8)
 
         except Exception as e:
             logger.error(f"Error cargando dashboard: {e}")

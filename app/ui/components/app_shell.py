@@ -41,7 +41,10 @@ class AppShell(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
+        self.is_collapsed = False
+        
         self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=0, minsize=SIZES["sidebar_w"])
         self.grid_columnconfigure(1, weight=1)
 
         from app.ui.components.navbar import Navbar  # import diferido
@@ -51,7 +54,7 @@ class AppShell(ctk.CTkFrame):
             navigate=self.navigate,
             active_view=self.config.active_view,
         )
-        self.sidebar.grid(row=0, column=0, sticky="nsw")
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
 
         main = ctk.CTkFrame(self, fg_color="transparent")
         main.grid(row=0, column=1, sticky="nsew")
@@ -73,12 +76,21 @@ class AppShell(ctk.CTkFrame):
         left = ctk.CTkFrame(self.topbar, fg_color="transparent")
         left.grid(row=0, column=0, sticky="w", padx=SIZES["padding"], pady=10)
 
+        # Burger button
+        self.btn_toggle = ctk.CTkButton(
+            left, text="☰", width=36, height=36, font=FONTS["heading"], 
+            fg_color="transparent", hover_color=COLORS["border"],
+            text_color=COLORS["text_primary"],
+            command=self._on_sidebar_toggle
+        )
+        self.btn_toggle.pack(side="left", padx=(0, 12))
+
         ctk.CTkLabel(
             left,
             text=self.config.title,
             font=FONTS["heading"],
             text_color=COLORS["text_primary"],
-        ).pack(anchor="w")
+        ).pack(side="left")
 
         # Búsqueda rápida (placeholder UX)
         center = ctk.CTkFrame(self.topbar, fg_color="transparent")
@@ -120,13 +132,20 @@ class AppShell(ctk.CTkFrame):
         self.content.grid_columnconfigure(0, weight=1)
         self.content.grid_rowconfigure(0, weight=1)
 
-        # Keyboard shortcuts: vincular al toplevel en lugar de usar bind_all,
-        # que no está permitido por customtkinter.
         toplevel = self.winfo_toplevel()
         if toplevel is not None:
             toplevel.bind("<Control-k>", lambda e: self.quick_search.focus_set())
             toplevel.bind("<Control-K>", lambda e: self.quick_search.focus_set())
 
     def _on_sidebar_toggle(self) -> None:
-        # Reflow layout: forzamos geometry manager a recalcular
+        self.is_collapsed = not getattr(self, "is_collapsed", False)
+        
+        # update container minsize
+        new_w = SIZES["sidebar_w_collapsed"] if self.is_collapsed else SIZES["sidebar_w"]
+        self.grid_columnconfigure(0, minsize=new_w)
+        
+        # call the method on sidebar to adapt its interior
+        if hasattr(self.sidebar, "toggle_collapsed"):
+            self.sidebar.toggle_collapsed(self.is_collapsed)
+            
         self.update_idletasks()
